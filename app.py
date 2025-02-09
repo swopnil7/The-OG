@@ -1,7 +1,9 @@
 import discord
 from discord.ext import commands
+from discord.ui import Button, View
 import json
 import os
+import random
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -243,7 +245,6 @@ async def on_message(message):
     if user_id not in activity_data:
         activity_data[user_id] = {"messages": 0}
 
- 
     activity_data[user_id]["messages"] += 1
 
     save_activity_data()
@@ -299,7 +300,81 @@ async def help_command(ctx):
     1. `!viewsunday` - `!viewfriday`: View routine for a specific day.
     2. `!viewweek`: View the entire week's routine.
     3. `!changesunday` - `!change<day>`: Modify a day's routine (Admin only).
+
+    **Rock-Paper-Scissors Commands:**
+    1. `!rps`: Play a single-player game of Rock-Paper-Scissors.
+    2. `!rpsmulti @user`: Challenge another user to a game of Rock-Paper-Scissors.
+
+    **Heads or Tails Commands:**
+    1. `!flip`: Play a single-player game of Heads or Tails.
+    2. `!flipmulti @user`: Challenge another user to a game of Heads or Tails.
     """
     await ctx.send(help_text)
+
+class RPSButton(Button):
+    def __init__(self, label, custom_id):
+        super().__init__(label=label, custom_id=custom_id)
+
+    async def callback(self, interaction: discord.Interaction):
+        view: RPSView = self.view
+        await view.handle_choice(interaction, self.custom_id)
+
+class RPSView(View):
+    def __init__(self, player1, player2=None):
+        super().__init__(timeout=60)
+        self.player1 = player1
+        self.player2 = player2
+        self.choices = {}
+        self.add_item(RPSButton(label="Rock", custom_id="rock"))
+        self.add_item(RPSButton(label="Paper", custom_id="paper"))
+        self.add_item(RPSButton(label="Scissors", custom_id="scissors"))
+
+    async def handle_choice(self, interaction: discord.Interaction, choice: str):
+        user = interaction.user
+        if user not in [self.player1, self.player2]:
+            await interaction.response.send_message("You are not part of this game.", ephemeral=True)
+            return
+
+        self.choices[user] = choice
+        await interaction.response.send_message(f"You chose {choice}.", ephemeral=True)
+
+        if self.player2:
+            if len(self.choices) == 2:
+                await self.resolve_game(interaction)
+        else:
+            await self.resolve_game(interaction)
+
+    async def resolve_game(self, interaction: discord.Interaction):
+        if self.player2:
+            p1_choice = self.choices[self.player1]
+            p2_choice = self.choices[self.player2]
+            result = self.determine_winner(p1_choice, p2_choice)
+            await interaction.followup.send(f"{self.player1.mention} chose {p1_choice}, {self.player2.mention} chose {p2_choice}. {result}")
+        else:
+            p1_choice = self.choices[self.player1]
+            bot_choice = random.choice(["rock", "paper", "scissors"])
+            result = self.determine_winner(p1_choice, bot_choice)
+            await interaction.followup.send(f"You chose {p1_choice}, I chose {bot_choice}. {result}")
+
+    def determine_winner(self, choice1, choice2):
+        if choice1 == choice2:
+            return "It's a tie!"
+        elif (choice1 == "rock" and choice2 == "scissors") or (choice1 == "paper" and choice2 == "rock") or (choice1 == "scissors" and choice2 == "paper"):
+            return f"{self.player1.mention} wins!" if self.player2 else "You win!"
+        else:
+            return f"{self.player2.mention} wins!" if self.player2 else "You lose!"
+
+@bot.command(name="rps")
+async def rps_single(ctx):
+    view = RPSView(player1=ctx.author)
+    await ctx.send("Choose your move:", view=view)
+
+@bot.command(name="rpsmulti")
+async def rps_multi(ctx, opponent: discord.User):
+    if opponent == ctx.author:
+        await ctx.send("You cannot challenge yourself.")
+        return
+    view = RPSView(player1=ctx.author, player2=opponent)
+    await ctx.send(f"{opponent.mention}, you have been challenged to a game of Rock-Paper-Scissors! Choose your move:", view=view)
 
 bot.run("bot_token")
