@@ -377,4 +377,69 @@ async def rps_multi(ctx, opponent: discord.User):
     view = RPSView(player1=ctx.author, player2=opponent)
     await ctx.send(f"{opponent.mention}, you have been challenged to a game of Rock-Paper-Scissors! Choose your move:", view=view)
 
+class FlipButton(Button):
+    def __init__(self, label, custom_id):
+        super().__init__(label=label, custom_id=custom_id)
+
+    async def callback(self, interaction: discord.Interaction):
+        view: FlipView = self.view
+        await view.handle_choice(interaction, self.custom_id)
+
+class FlipView(View):
+    def __init__(self, player1, player2=None):
+        super().__init__(timeout=60)
+        self.player1 = player1
+        self.player2 = player2
+        self.choices = {}
+        self.add_item(FlipButton(label="Heads", custom_id="heads"))
+        self.add_item(FlipButton(label="Tails", custom_id="tails"))
+
+    async def handle_choice(self, interaction: discord.Interaction, choice: str):
+        user = interaction.user
+        if user not in [self.player1, self.player2]:
+            await interaction.response.send_message("You are not part of this game.", ephemeral=True)
+            return
+
+        self.choices[user] = choice
+        await interaction.response.send_message(f"You chose {choice}.", ephemeral=True)
+
+        if self.player2:
+            if len(self.choices) == 2:
+                await self.resolve_game(interaction)
+        else:
+            await self.resolve_game(interaction)
+
+    async def resolve_game(self, interaction: discord.Interaction):
+        coin_result = random.choice(["heads", "tails"])
+        if self.player2:
+            p1_choice = self.choices[self.player1]
+            p2_choice = self.choices[self.player2]
+            result = self.determine_winner(p1_choice, p2_choice, coin_result)
+            await interaction.followup.send(f"The coin landed on {coin_result}. {result}")
+        else:
+            p1_choice = self.choices[self.player1]
+            result = "You win!" if p1_choice == coin_result else "You lose!"
+            await interaction.followup.send(f"The coin landed on {coin_result}. {result}")
+
+    def determine_winner(self, choice1, choice2, coin_result):
+        if choice1 == coin_result and choice2 == coin_result:
+            return "It's a tie!"
+        elif choice1 == coin_result:
+            return f"{self.player1.mention} wins!"
+        else:
+            return f"{self.player2.mention} wins!"
+
+@bot.command(name="flip")
+async def flip_single(ctx):
+    view = FlipView(player1=ctx.author)
+    await ctx.send("Choose Heads or Tails:", view=view)
+
+@bot.command(name="flipmulti")
+async def flip_multi(ctx, opponent: discord.User):
+    if opponent == ctx.author:
+        await ctx.send("You cannot challenge yourself.")
+        return
+    view = FlipView(player1=ctx.author, player2=opponent)
+    await ctx.send(f"{opponent.mention}, you have been challenged to a game of Heads or Tails! Choose your side:", view=view)
+
 bot.run("bot_token")
