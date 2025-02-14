@@ -317,6 +317,9 @@ class RPSButton(Button):
 
     async def callback(self, interaction: discord.Interaction):
         view: RPSView = self.view
+        if interaction.user in view.choices:
+            await interaction.response.send_message("You have already made your choice.", ephemeral=True)
+            return
         await view.handle_choice(interaction, self.custom_id)
 
 class RPSView(View):
