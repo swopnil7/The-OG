@@ -445,4 +445,43 @@ async def flip_multi(ctx, opponent: discord.User):
     view = FlipView(player1=ctx.author, player2=opponent)
     await ctx.send(f"{opponent.mention}, you have been challenged to a game of Heads or Tails! Choose your side:", view=view)
 
+@bot.event
+async def on_voice_state_update(member, before, after):
+    if before.channel is None and after.channel is not None:
+        # User joined a voice channel
+        if "voice_log" not in activity_data:
+            activity_data["voice_log"] = {}
+        if str(after.channel.id) not in activity_data["voice_log"]:
+            activity_data["voice_log"][str(after.channel.id)] = []
+        activity_data["voice_log"][str(after.channel.id)].append({
+            "user": member.name,
+            "action": "joined",
+            "timestamp": str(after.channel.guild.me.joined_at)
+        })
+    elif before.channel is not None and after.channel is None:
+        # User left a voice channel
+        if "voice_log" not in activity_data:
+            activity_data["voice_log"] = {}
+        if str(before.channel.id) not in activity_data["voice_log"]:
+            activity_data["voice_log"][str(before.channel.id)] = []
+        activity_data["voice_log"][str(before.channel.id)].append({
+            "user": member.name,
+            "action": "left",
+            "timestamp": str(before.channel.guild.me.joined_at)
+        })
+    save_activity_data()
+
+@bot.event
+async def on_guild_channel_delete(channel):
+    if isinstance(channel, discord.VoiceChannel):
+        if "voice_log" in activity_data and str(channel.id) in activity_data["voice_log"]:
+            log_channel = channel.guild.get_channel(1308408556961136680)
+            if log_channel:
+                log_entries = activity_data["voice_log"].pop(str(channel.id), [])
+                log_message = f"Voice channel '{channel.name}' log:\n"
+                for entry in log_entries:
+                    log_message += f"{entry['timestamp']}: {entry['user']} {entry['action']} the channel.\n"
+                await log_channel.send(log_message)
+            save_activity_data()
+
 bot.run("bot_token")
