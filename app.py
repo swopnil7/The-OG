@@ -456,7 +456,7 @@ async def on_voice_state_update(member, before, after):
         activity_data["voice_log"][str(after.channel.id)].append({
             "user": member.name,
             "action": "joined",
-            "timestamp": str(after.channel.guild.me.joined_at)
+            "timestamp": str(discord.utils.utcnow())
         })
     elif before.channel is not None and after.channel is None:
         # User left a voice channel
@@ -467,7 +467,7 @@ async def on_voice_state_update(member, before, after):
         activity_data["voice_log"][str(before.channel.id)].append({
             "user": member.name,
             "action": "left",
-            "timestamp": str(before.channel.guild.me.joined_at)
+            "timestamp": str(discord.utils.utcnow())
         })
     save_activity_data()
 
