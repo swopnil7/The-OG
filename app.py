@@ -12,6 +12,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 GAME_FILE = "game_usernames.json"
 ROUTINE_FILE = "class_routine.json"
 ACTIVITY_FILE = "activity_data.json"
+VOICE_ACTIVITY_FILE = "voice_activity_data.json"
 
 def load_game_data():
     if os.path.exists(GAME_FILE):
@@ -49,10 +50,21 @@ def load_activity_data():
 def save_activity_data():
     with open(ACTIVITY_FILE, "w") as file:
         json.dump(activity_data, file, indent=4)
+
+def load_voice_activity_data():
+    if os.path.exists(VOICE_ACTIVITY_FILE):
+        with open(VOICE_ACTIVITY_FILE, "r") as file:
+            return json.load(file)
+    return {}
+
+def save_voice_activity_data(activity_data):
+    with open(VOICE_ACTIVITY_FILE, "w") as file:
+        json.dump(activity_data, file, indent=4)
         
 game_usernames = load_game_data()
 class_routine = load_routine_data()
 activity_data = load_activity_data()
+voice_activity_data = load_voice_activity_data()
 
 def format_routine_table(day: str, schedule: str) -> str:
     abbreviations = {
@@ -445,20 +457,7 @@ async def flip_multi(ctx, opponent: discord.User):
     view = FlipView(player1=ctx.author, player2=opponent)
     await ctx.send(f"{opponent.mention}, you have been challenged to a game of Heads or Tails! Choose your side:", view=view)
 
-VOICE_ACTIVITY_FILE = "voice_activity_data.json"
-
-def load_voice_activity_data():
-    if os.path.exists(VOICE_ACTIVITY_FILE):
-        with open(VOICE_ACTIVITY_FILE, "r") as file:
-            return json.load(file)
-    return {}
-
-def save_voice_activity_data(activity_data):
-    with open(VOICE_ACTIVITY_FILE, "w") as file:
-        json.dump(activity_data, file, indent=4)
-
-voice_activity_data = load_voice_activity_data()
-
+@bot.event
 async def on_voice_state_update(member, before, after):
     if before.channel is None and after.channel is not None:
         # User joined a voice channel
@@ -482,18 +481,17 @@ async def on_voice_state_update(member, before, after):
             "action": "left",
             "timestamp": str(discord.utils.utcnow())
         })
-    save_voice_activity_data(voice_activity_data)
-
-async def on_guild_channel_delete(channel):
-    if isinstance(channel, discord.VoiceChannel):
-        if "voice_log" in voice_activity_data and str(channel.id) in voice_activity_data["voice_log"]:
-            log_channel = channel.guild.get_channel(1308408556961136680)
+        
+        # Check if the voice channel is now empty
+        if before.channel.members == []:
+            log_channel = member.guild.get_channel(1308408556961136680)
             if log_channel:
-                log_entries = voice_activity_data["voice_log"].pop(str(channel.id), [])
-                log_message = f"Voice channel '{channel.name}' log:\n"
+                log_entries = voice_activity_data["voice_log"].pop(str(before.channel.id), [])
+                log_message = f"Voice channel '{before.channel.name}' log:\n"
                 for entry in log_entries:
                     log_message += f"{entry['timestamp']}: {entry['user']} {entry['action']} the channel.\n"
                 await log_channel.send(log_message)
-            save_voice_activity_data(voice_activity_data)
+                
+    save_voice_activity_data(voice_activity_data)
 
 bot.run("bot_token")
