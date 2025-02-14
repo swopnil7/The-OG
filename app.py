@@ -300,30 +300,6 @@ async def view_activity(ctx, member: discord.Member = None):
 async def on_shutdown():
     save_activity_data()
     
-@bot.command(name="helpme")
-async def help_command(ctx):
-    help_text = """
-    **Game Username Commands:**
-    1. `!addgame <game_name> <username> [@user]`: Add or update a username.
-    2. `!view <game_name>`: View usernames for a game.
-    3. `!games`: List all games.
-    4. `!viewuser @user`: View a user's usernames across games.
-
-    **Routine Commands:**
-    1. `!viewsunday` - `!viewfriday`: View routine for a specific day.
-    2. `!viewweek`: View the entire week's routine.
-    3. `!changesunday` - `!change<day>`: Modify a day's routine (Admin only).
-
-    **Rock-Paper-Scissors Commands:**
-    1. `!rps`: Play a single-player game of Rock-Paper-Scissors.
-    2. `!rpsmulti @user`: Challenge another user to a game of Rock-Paper-Scissors.
-
-    **Heads or Tails Commands:**
-    1. `!flip`: Play a single-player game of Heads or Tails.
-    2. `!flipmulti @user`: Challenge another user to a game of Heads or Tails.
-    """
-    await ctx.send(help_text)
-
 class RPSButton(Button):
     def __init__(self, label, custom_id):
         super().__init__(label=label, custom_id=custom_id)
@@ -461,7 +437,6 @@ async def flip_multi(ctx, opponent: discord.User):
 @bot.event
 async def on_voice_state_update(member, before, after):
     if before.channel is None and after.channel is not None:
-        # User joined a voice channel
         if "voice_log" not in voice_activity_data:
             voice_activity_data["voice_log"] = {}
         if str(after.channel.id) not in voice_activity_data["voice_log"]:
@@ -472,7 +447,6 @@ async def on_voice_state_update(member, before, after):
             "timestamp": str(discord.utils.utcnow() + datetime.timedelta(hours=0, minutes=0))
         })
     elif before.channel is not None and after.channel is None:
-        # User left a voice channel
         if "voice_log" not in voice_activity_data:
             voice_activity_data["voice_log"] = {}
         if str(before.channel.id) not in voice_activity_data["voice_log"]:
@@ -483,7 +457,6 @@ async def on_voice_state_update(member, before, after):
             "timestamp": str(discord.utils.utcnow() + datetime.timedelta(hours=0, minutes=0))
         })
         
-        # Check if the voice channel is now empty
         if before.channel.members == []:
             log_channel = member.guild.get_channel(1308408556961136680)
             if log_channel:
@@ -495,5 +468,32 @@ async def on_voice_state_update(member, before, after):
                 await log_channel.send(log_message)
                 
     save_voice_activity_data(voice_activity_data)
+
+@bot.command(name="helpme")
+async def help_command(ctx):
+    help_text = """
+    **Game Username Commands:**
+    1. `!addgame <game_name> <username> [@user]`: Add or update a username.
+    2. `!view <game_name>`: View usernames for a game.
+    3. `!games`: List all games.
+    4. `!viewuser @user`: View a user's usernames across games.
+
+    **Routine Commands:**
+    1. `!viewsunday` - `!viewfriday`: View routine for a specific day.
+    2. `!viewweek`: View the entire week's routine.
+    3. `!changesunday` - `!change<day>`: Modify a day's routine (Admin only).
+
+    **Activity Commands:**
+    1. `!activity [@user]`: View activity stats for a user.
+
+    **Rock-Paper-Scissors Commands:**
+    1. `!rps`: Play a single-player game of Rock-Paper-Scissors.
+    2. `!rpsmulti @user`: Challenge another user to a game of Rock-Paper-Scissors.
+
+    **Heads or Tails Commands:**
+    1. `!flip`: Play a single-player game of Heads or Tails.
+    2. `!flipmulti @user`: Challenge another user to a game of Heads or Tails.
+    """
+    await ctx.send(help_text)
 
 bot.run("bot_token")
