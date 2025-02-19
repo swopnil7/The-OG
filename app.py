@@ -471,10 +471,18 @@ async def on_voice_state_update(member, before, after):
 
 @bot.command(name="announce")
 @commands.has_permissions(administrator=True)
-async def announce(ctx, channel: discord.TextChannel = None, *, message: str):
-    if channel is None:
+async def announce(ctx, *, message: str):
+    parts = message.split()
+    potential_channel = parts[0]
+    if potential_channel.startswith('<#') and potential_channel.endswith('>'):
+        channel_id = int(potential_channel[2:-1])
+        channel = bot.get_channel(channel_id)
+        if channel is None:
+            await ctx.send("Invalid channel mention.")
+            return
+        message = ' '.join(parts[1:])
+    else:
         channel = ctx.channel
-        message = ctx.message.content[len(ctx.prefix + ctx.invoked_with):].strip()
     await channel.send(message)
     await ctx.message.delete()
 
