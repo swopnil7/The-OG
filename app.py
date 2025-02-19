@@ -474,7 +474,9 @@ async def on_voice_state_update(member, before, after):
 async def announce(ctx, channel: discord.TextChannel = None, *, message: str):
     if channel is None:
         channel = ctx.channel
+        message = ctx.message.content[len(ctx.prefix + ctx.invoked_with):].strip()
     await channel.send(message)
+    await ctx.message.delete()
 
 @bot.command(name="helpme")
 async def help_command(ctx):
