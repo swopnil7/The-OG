@@ -469,6 +469,13 @@ async def on_voice_state_update(member, before, after):
                 
     save_voice_activity_data(voice_activity_data)
 
+@bot.command(name="announce")
+@commands.has_permissions(administrator=True)
+async def announce(ctx, channel: discord.TextChannel = None, *, message: str):
+    if channel is None:
+        channel = ctx.channel
+    await channel.send(message)
+
 @bot.command(name="helpme")
 async def help_command(ctx):
     help_text = """
