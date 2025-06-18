@@ -669,3 +669,16 @@ async def helpme_slash(interaction: discord.Interaction):
     await interaction.response.send_message(help_text, ephemeral=True)
 
 bot.run(os.getenv("DISCORD_BOT_TOKEN"))
+
+# Ensure the bot token is set in the environment variable DISCORD_BOT_TOKEN
+# You can set it in your terminal or in a .env file if you're using dotenv.
+# Example: export DISCORD_BOT_TOKEN="your_token_here"
+# Make sure to install the required libraries:
+# pip install -r requirements.txt
+# rename bot.py to app.py if you want to deploy it on a server.
+# Also, ensure you have the necessary permissions for the bot in your Discord server.
+# The bot requires permissions to read messages, send messages, manage roles, and view channels.
+# If you want to run this bot, make sure you have a valid Discord bot token and the necessary intents enabled.
+# You can create a bot and get the token from the Discord Developer Portal.
+# Make sure to handle the bot token securely and not expose it in public repositories.
+# You can also modify and add more features and commands to the bot as per your requirements.
