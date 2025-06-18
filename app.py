@@ -5,6 +5,7 @@ import json
 import os
 import random
 import datetime
+import matplotlib.pyplot as plt
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -30,12 +31,12 @@ def load_routine_data():
         with open(ROUTINE_FILE, "r") as file:
             return json.load(file)
     return {
-        "sunday": "Calculus, Digital Logic, Problem Solving Techniques, Leisure",
-        "monday": "C, Calculus, Digital Logic, Discrete Maths",
-        "tuesday": "Calculus, Digital Logic, Drawing Practical (A)/Digital Logic Practical (B), Drawing Practical (A)/C Practical (B)",
-        "wednesday": "Discrete Maths, Calculus, Problem Solving Techniques, Digital Logic Practical (A)/C Practical (B)",
-        "thursday": "Workshop (A)/Drawing Practical (B), C Practical (A)/Drawing Practical (B), C, Problem Solving Techniques",
-        "friday": "Discrete Maths, C, C Practical (A)/Workshop (B), Leisure",
+    	"sunday": "AG, OOP, WT, AP",
+    	"monday": "AG, OOP, MCA Lab (A)/WT Lab (B), OOP Lab (A)/AP Lab (B)",
+    	"tuesday": "OOP, MCA, CT, WT",
+    	"wednesday": "AP, AG, AP Lab (A)/OOP Lab(B), MCA",
+    	"thursday": " , MCA, WT, AG",
+    	"friday": "AP, OOP Lab(A)/AP Lab(B), WT Lab (A)/OOP Lab (B), CT",
     }
 
 def save_routine_data():
@@ -83,6 +84,29 @@ def format_routine_table(day: str, schedule: str) -> str:
     for idx, subject in enumerate(rows, 1):
         table += f"**Period {idx}:** {subject}\n"
     return table
+
+def format_weekly_routine_table(routine: dict) -> str:
+    days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    lines = []
+    for day in days:
+        schedule = routine.get(day.lower(), "")
+        periods = schedule.split(", ")
+        while len(periods) < 4:
+            periods.append("")
+        lines.append(f"{day}:")
+        for period_idx, subj in enumerate(periods):
+            sub_subjects = [s.strip() for s in subj.split("/") if s.strip()]
+            if sub_subjects:
+                lines.append(f"  Period {period_idx+1}: {sub_subjects[0]}")
+                for mini_subj in sub_subjects[1:]:
+                    lines.append(f"      {mini_subj}")
+            else:
+                lines.append(f"  Period {period_idx+1}: ")
+            if period_idx < 3:
+                lines.append("  --------")
+        lines.append("")
+    result = '```' + '\n'.join(lines).strip() + '```'
+    return result
 
 @bot.event
 async def on_ready():
@@ -143,13 +167,6 @@ async def view_user_usernames(ctx, member: discord.User):
     response = f"Usernames for {member.name}:\n"
     for game, username in user_games:
         response += f"- {game}: {username}\n"
-    await ctx.send(response)
-
-@bot.command(name="viewweek")
-async def view_week(ctx):
-    response = ""
-    for day, schedule in class_routine.items():
-        response += format_routine_table(day.capitalize(), schedule) + "\n"
     await ctx.send(response)
 
 @bot.command(name="viewsunday")
@@ -499,6 +516,8 @@ async def help_command(ctx):
     1. `!viewsunday` - `!viewfriday`: View routine for a specific day.
     2. `!viewweek`: View the entire week's routine.
     3. `!changesunday` - `!change<day>`: Modify a day's routine (Admin only).
+    4. `!routine`: Get the weekly routine as an image.
+    5. `!routinepdf`: Get the weekly routine as a styled PDF.
 
     **Activity Commands:**
     1. `!activity [@user]`: View activity stats for a user.
@@ -510,7 +529,156 @@ async def help_command(ctx):
     **Heads or Tails Commands:**
     1. `!flip`: Play a single-player game of Heads or Tails.
     2. `!flipmulti @user`: Challenge another user to a game of Heads or Tails.
+
+    **Other Commands:**
+    1. `!announce <#channel> <message>`: Announce a message to a channel (Admin only).
+    2. `!helpme`: Show this help message.
     """
     await ctx.send(help_text)
 
-bot.run("bot_token")
+@bot.command(name="viewweek")
+async def view_week(ctx):
+    table = format_weekly_routine_table(class_routine)
+    await ctx.send(table)
+
+def strip_ab_label(subject):
+    # Remove trailing ' (A)' or ' (B)' or '(A)' or '(B)' (with or without space)
+    return subject.rstrip().replace(' (A)', '').replace(' (B)', '').replace('(A)', '').replace('(B)', '').strip()
+
+def generate_routine_image(routine, filename="routine.png"):
+    days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    periods = [f"Period {i}" for i in range(1, 5)]
+    data = []
+    for day in days:
+        schedule = routine.get(day.lower(), "")
+        period_cells = []
+        for p in schedule.split(", "):
+            ab = [s.strip() for s in p.split("/") if s.strip()]
+            if len(ab) == 2:
+                a = strip_ab_label(ab[0])
+                b = strip_ab_label(ab[1])
+                period_cells.append(f"A: {a}\nB: {b}")
+            elif ab:
+                period_cells.append(ab[0])
+            else:
+                period_cells.append("")
+        while len(period_cells) < 4:
+            period_cells.append("")
+        data.append([day] + period_cells)
+
+    fig, ax = plt.subplots(figsize=(11, 4))
+    ax.axis('off')
+    table = ax.table(
+        cellText=data,
+        colLabels=["Day"] + periods,
+        cellLoc='center',
+        loc='center',
+        colColours=["#2d415a"] + ["#4f6d7a"]*4
+    )
+    table.auto_set_font_size(False)
+    table.set_fontsize(12)
+    table.scale(1.2, 1.6)
+
+    # Style header
+    for (row, col), cell in table.get_celld().items():
+        if row == 0:
+            cell.set_fontsize(13)
+            cell.set_text_props(weight='bold', color='white')
+            cell.set_facecolor('#2d415a')
+        elif row % 2 == 1:
+            cell.set_facecolor('#f2f2f2')
+        else:
+            cell.set_facecolor('#e0e7ef')
+        cell.set_linewidth(1.5)
+        cell.set_edgecolor('#4f6d7a')
+        cell.set_height(0.15)
+
+    plt.title("Weekly Class Routine", fontsize=16, fontweight='bold', pad=20)
+    plt.tight_layout(pad=2.0)
+    plt.savefig(filename, bbox_inches='tight', dpi=200)
+    plt.close()
+
+@bot.command(name="routine")
+async def routine_image(ctx):
+    filename = "routine.png"
+    generate_routine_image(class_routine, filename)
+    if os.path.exists(filename):
+        with open(filename, "rb") as f:
+            await ctx.send(file=discord.File(f, filename))
+    else:
+        await ctx.send("Routine screenshot not found on the server.")
+
+@bot.command(name="routinepdf")
+async def routine_pdfimg(ctx):
+    filename = "routine.pdf"
+    generate_routine_image_pdf(class_routine, filename)
+    if os.path.exists(filename):
+        with open(filename, "rb") as f:
+            await ctx.send(file=discord.File(f, filename))
+    else:
+        await ctx.send("Routine PDF not found on the server.")
+
+def generate_routine_image_pdf(routine, filename="routine.pdf"):
+    days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    periods = [f"Period {i}" for i in range(1, 5)]
+    data = []
+    for day in days:
+        schedule = routine.get(day.lower(), "")
+        period_cells = []
+        for p in schedule.split(", "):
+            ab = [s.strip() for s in p.split("/") if s.strip()]
+            if len(ab) == 2:
+                a = strip_ab_label(ab[0])
+                b = strip_ab_label(ab[1])
+                period_cells.append(f"A: {a}\nB: {b}")
+            elif ab:
+                period_cells.append(ab[0])
+            else:
+                period_cells.append("")
+        while len(period_cells) < 4:
+            period_cells.append("")
+        data.append([day] + period_cells)
+
+    fig, ax = plt.subplots(figsize=(14, 6))
+    ax.axis('off')
+    table = ax.table(
+        cellText=data,
+        colLabels=["Day"] + periods,
+        cellLoc='center',
+        loc='center',
+        colColours=["#2d415a"] + ["#4f6d7a"]*4,
+        bbox=[0, 0.08, 1, 0.80]
+    )
+    table.auto_set_font_size(False)
+    table.set_fontsize(15)
+    table.scale(1.5, 2.0)
+
+    for (row, col), cell in table.get_celld().items():
+        if row == 0:
+            cell.set_fontsize(16)
+            cell.set_text_props(weight='bold', color='white')
+            cell.set_facecolor('#2d415a')
+        elif row % 2 == 1:
+            cell.set_facecolor('#f2f2f2')
+        else:
+            cell.set_facecolor('#e0e7ef')
+        cell.set_linewidth(1.5)
+        cell.set_edgecolor('#4f6d7a')
+        cell.set_height(0.18)
+
+    plt.subplots_adjust(top=0.92)
+    plt.title("Weekly Class Routine", fontsize=22, fontweight='bold', pad=10)
+    plt.tight_layout(pad=1.0)
+    plt.savefig(filename, bbox_inches='tight', dpi=250, format='pdf')
+    plt.close()
+
+bot.run(os.getenv("DISCORD_BOT_TOKEN"))
+
+# Ensure the environment variable DISCORD_BOT_TOKEN is set before running the bot
+# You can set it in your terminal or in a .env file
+# Example: export DISCORD_BOT_TOKEN="your_token_here"
+# Make sure to install the required libraries: discord.py, matplotlib, and any others you need
+# You can install them using pip:
+# pip install -r requirements.txt
+# This bot is designed to be run in a Discord server where you have the necessary permissions to manage roles and send messages in the channels.
+# You can extend the functionality further by adding more commands and features as per your requirements.
