@@ -89,7 +89,7 @@ A bot I made for my class's discord server 'The OGs'. Kinda cool bot that can do
    ```
 3. Create a .env file and add your bot token:
     ```
-    DISCORD_BOT_TOKEN=your_bot_token
+    export DISCORD_BOT_TOKEN="your_bot_token"
     ```
 4. Run the bot:
     ```bash
