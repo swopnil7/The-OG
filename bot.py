@@ -6,80 +6,76 @@ import json
 import os
 import random
 import datetime
+import pathlib
 import matplotlib.pyplot as plt
 
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-GAME_FILE = "game_usernames.json"
-ROUTINE_FILE = "class_routine.json"
-ACTIVITY_FILE = "activity_data.json"
-VOICE_ACTIVITY_FILE = "voice_activity_data.json"
+DATA_ROOT = "guild_data"
 
-def load_game_data():
-    if os.path.exists(GAME_FILE):
-        with open(GAME_FILE, "r") as file:
+def get_guild_folder(guild_id):
+    folder = os.path.join(DATA_ROOT, str(guild_id))
+    os.makedirs(folder, exist_ok=True)
+    return folder
+
+def get_guild_file(guild_id, filename):
+    return os.path.join(get_guild_folder(guild_id), filename)
+
+def load_json_file(filepath, default=None):
+    if os.path.exists(filepath):
+        with open(filepath, "r", encoding="utf-8") as file:
             return json.load(file)
-    return {}
+    return default if default is not None else {}
 
-def save_game_data(game_usernames):
-    with open(GAME_FILE, "w") as file:
-        json.dump(game_usernames, file, indent=4)
+def save_json_file(filepath, data):
+    with open(filepath, "w", encoding="utf-8") as file:
+        json.dump(data, file, indent=4)
 
-def load_routine_data():
-    if os.path.exists(ROUTINE_FILE):
-        with open(ROUTINE_FILE, "r") as file:
-            return json.load(file)
-    return {
-    	"sunday": "AG, OOP, WT, AP",
-    	"monday": "AG, OOP, MCA Lab (A)/WT Lab (B), OOP Lab (A)/AP Lab (B)",
-    	"tuesday": "OOP, MCA, CT, WT",
-    	"wednesday": "AP, AG, AP Lab (A)/OOP Lab(B), MCA",
-    	"thursday": " , MCA, WT, AG",
-    	"friday": "AP, OOP Lab(A)/AP Lab(B), WT Lab (A)/OOP Lab (B), CT",
-    }
+def load_game_data(guild_id):
+    return load_json_file(get_guild_file(guild_id, "game_usernames.json"), default={})
 
-def save_routine_data(class_routine):
-    with open(ROUTINE_FILE, "w") as file:
-        json.dump(class_routine, file, indent=4)
-        
-def load_activity_data():
-    if os.path.exists(ACTIVITY_FILE):
-        with open(ACTIVITY_FILE, "r") as file:
-            return json.load(file)
-    return {}
+def save_game_data(guild_id, game_usernames):
+    save_json_file(get_guild_file(guild_id, "game_usernames.json"), game_usernames)
 
-def save_activity_data(activity_data):
-    with open(ACTIVITY_FILE, "w") as file:
-        json.dump(activity_data, file, indent=4)
+def load_routine_data(guild_id):
+    return load_json_file(get_guild_file(guild_id, "class_routine.json"), default={})
 
-def load_voice_activity_data():
-    if os.path.exists(VOICE_ACTIVITY_FILE):
-        with open(VOICE_ACTIVITY_FILE, "r") as file:
-            return json.load(file)
-    return {}
+def save_routine_data(guild_id, class_routine):
+    save_json_file(get_guild_file(guild_id, "class_routine.json"), class_routine)
 
-def save_voice_activity_data(activity_data):
-    with open(VOICE_ACTIVITY_FILE, "w") as file:
-        json.dump(activity_data, file, indent=4)
-        
-game_usernames = load_game_data()
-class_routine = load_routine_data()
-activity_data = load_activity_data()
-voice_activity_data = load_voice_activity_data()
+def load_activity_data(guild_id):
+    return load_json_file(get_guild_file(guild_id, "activity_data.json"), default={})
+
+def save_activity_data(guild_id, activity_data):
+    save_json_file(get_guild_file(guild_id, "activity_data.json"), activity_data)
+
+def load_voice_activity_data(guild_id):
+    return load_json_file(get_guild_file(guild_id, "voice_activity_data.json"), default={})
+
+def save_voice_activity_data(guild_id, activity_data):
+    save_json_file(get_guild_file(guild_id, "voice_activity_data.json"), activity_data)
+
+# These will be set per-guild in each command/event
+# Example: game_usernames[guild_id] = load_game_data(guild_id)
+game_usernames = {}
+class_routine = {}
+activity_data = {}
+voice_activity_data = {}
+
+# Helper to get and cache per-guild data
+def ensure_guild_data(guild_id):
+    if guild_id not in game_usernames:
+        game_usernames[guild_id] = load_game_data(guild_id)
+    if guild_id not in class_routine:
+        class_routine[guild_id] = load_routine_data(guild_id)
+    if guild_id not in activity_data:
+        activity_data[guild_id] = load_activity_data(guild_id)
+    if guild_id not in voice_activity_data:
+        voice_activity_data[guild_id] = load_voice_activity_data(guild_id)
 
 def format_routine_table(day: str, schedule: str) -> str:
-    abbreviations = {
-        "Digital Logic": "DL",
-        "Drawing Practical": "Drawing",
-        "Problem Solving Techniques": "PST",
-        "Discrete Maths": "DS",
-    }
-
-    for full_name, abbr in abbreviations.items():
-        schedule = schedule.replace(full_name, abbr)
-
     rows = schedule.split(", ")
     table = f"**{day.capitalize()} Routine:**\n"
     for idx, subject in enumerate(rows, 1):
@@ -118,9 +114,21 @@ async def on_ready():
     except Exception as e:
         print(f"Failed to sync commands: {e}")
 
+@bot.event
+async def on_guild_join(guild):
+    ensure_guild_data(guild.id)
+
+@bot.event
+async def on_guild_available(guild):
+    ensure_guild_data(guild.id)
+
+
 @bot.tree.command(name="addgame", description="Add or update a game username for a user")
 @app_commands.describe(game_name="The name of the game", username="Your username in the game", member="The user to add the game for (optional)")
 async def add_game(interaction: discord.Interaction, game_name: str, username: str, member: discord.User = None):
+    guild_id = interaction.guild.id
+    ensure_guild_data(guild_id)
+
     if not member:
         member = interaction.user
 
@@ -128,46 +136,58 @@ async def add_game(interaction: discord.Interaction, game_name: str, username: s
         await interaction.response.send_message("You do not have permission to add usernames for other users.", ephemeral=True)
         return
 
-    user_id = member.id
+    user_id = str(member.id)
     game_name = game_name.lower()
 
-    if game_name not in game_usernames:
-        game_usernames[game_name] = {}
-    game_usernames[game_name][str(user_id)] = username
-    save_game_data(game_usernames)
+    if game_name not in game_usernames[guild_id]:
+        game_usernames[guild_id][game_name] = {}
+    game_usernames[guild_id][game_name][user_id] = username
+    save_game_data(guild_id, game_usernames[guild_id])
     await interaction.response.send_message(f"Added/Updated username for {member.name} in game '{game_name}'.")
 
 @bot.tree.command(name="view", description="View all registered usernames of a specific game")
 @app_commands.describe(game_name="The name of the game to view usernames for")
 async def view_usernames(interaction: discord.Interaction, game_name: str):
+    guild_id = interaction.guild.id
+    ensure_guild_data(guild_id)
+
     game_name = game_name.lower()
 
-    if game_name not in game_usernames or not game_usernames[game_name]:
+    if game_name not in game_usernames[guild_id] or not game_usernames[guild_id][game_name]:
         await interaction.response.send_message(f"No usernames found for game '{game_name}'.")
         return
 
     response = f"Usernames for game '{game_name}':\n"
-    for user_id, username in game_usernames[game_name].items():
+    for user_id, username in game_usernames[guild_id][game_name].items():
         user = await bot.fetch_user(int(user_id))
         response += f"- {user.name}: {username}\n"
     await interaction.response.send_message(response)
 
 @bot.tree.command(name="games", description="List all games with usernames")
 async def list_games(interaction: discord.Interaction):
-    if not game_usernames:
+    guild_id = interaction.guild.id
+    ensure_guild_data(guild_id)
+
+    if not game_usernames[guild_id]:
         await interaction.response.send_message("No games have been added yet.")
         return
 
     response = "Games with usernames:\n"
-    for game in game_usernames.keys():
+    for game in game_usernames[guild_id].keys():
         response += f"• {game}\n"
     await interaction.response.send_message(response)
 
 @bot.tree.command(name="viewuser", description="View all usernames registered for a user across all games")
 @app_commands.describe(member="The user to view the usernames of")
 async def view_user_usernames(interaction: discord.Interaction, member: discord.User):
+    guild_id = interaction.guild.id
+    ensure_guild_data(guild_id)
     user_id = str(member.id)
-    user_games = [(game, users[user_id]) for game, users in game_usernames.items() if user_id in users]
+    user_games = [
+        (game, users[user_id])
+        for game, users in game_usernames[guild_id].items()
+        if user_id in users
+    ]
 
     if not user_games:
         await interaction.response.send_message(f"{member.name} does not have any usernames registered.")
@@ -181,6 +201,8 @@ async def view_user_usernames(interaction: discord.Interaction, member: discord.
 @bot.tree.command(name="routineday", description="View the class routine for a specific day")
 @app_commands.describe(day="Day of the week (e.g., sunday, monday, ...)")
 async def routine_day(interaction: discord.Interaction, day: str):
+    guild_id = interaction.guild.id
+    ensure_guild_data(guild_id)
     day_lower = day.lower()
     valid_days = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday"]
     if day_lower not in valid_days:
@@ -189,18 +211,22 @@ async def routine_day(interaction: discord.Interaction, day: str):
             ephemeral=True
         )
         return
-    schedule = class_routine.get(day_lower, "No routine found.")
+    schedule = class_routine[guild_id].get(day_lower, "No routine found.")
     table = format_routine_table(day.capitalize(), schedule)
     await interaction.response.send_message(table)
 
 @bot.tree.command(name="routineweek", description="View the entire week's class routine as text.")
 async def routineweek_slash(interaction: discord.Interaction):
-    table = format_weekly_routine_table(class_routine)
+    guild_id = interaction.guild.id
+    ensure_guild_data(guild_id)
+    table = format_weekly_routine_table(class_routine[guild_id])
     await interaction.response.send_message(table, ephemeral=True)
 
 @bot.tree.command(name="changeday", description="Change the routine for a specific day")
 @app_commands.describe(day="Day of the week (e.g., sunday, monday, ...)", schedule="The new schedule for the day")
 async def change_day(interaction: discord.Interaction, day: str, schedule: str):
+    guild_id = interaction.guild.id
+    ensure_guild_data(guild_id)
     valid_days = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday"]
     day_lower = day.lower()
     if day_lower not in valid_days:
@@ -212,8 +238,8 @@ async def change_day(interaction: discord.Interaction, day: str, schedule: str):
     if not interaction.user.guild_permissions.administrator:
         await interaction.response.send_message("You do not have permission to modify the routine.", ephemeral=True)
         return
-    class_routine[day_lower] = schedule
-    save_routine_data(class_routine)
+    class_routine[guild_id][day_lower] = schedule
+    save_routine_data(guild_id, class_routine[guild_id])
     await interaction.response.send_message(f"{day.capitalize()}'s routine updated successfully!")
 
 PROMOTIONS = {
@@ -225,25 +251,26 @@ PROMOTIONS = {
 
 @bot.event
 async def on_message(message):
-    if message.author.bot:
+    if message.author.bot or not message.guild:
         return
 
+    guild_id = message.guild.id
+    ensure_guild_data(guild_id)
     user_id = str(message.author.id)
-    if user_id not in activity_data:
-        activity_data[user_id] = {"messages": 0}
 
-    activity_data[user_id]["messages"] += 1
+    if user_id not in activity_data[guild_id]:
+        activity_data[guild_id][user_id] = {"messages": 0}
 
-    save_activity_data(activity_data)
+    activity_data[guild_id][user_id]["messages"] += 1
+    save_activity_data(guild_id, activity_data[guild_id])
 
-    await check_promotion(message.author, message.guild)
-
+    await check_promotion(message.author, message.guild, guild_id)
     await bot.process_commands(message)
 
-async def check_promotion(member, guild):
+async def check_promotion(member, guild, guild_id):
     """Check if a user qualifies for promotion."""
     user_id = str(member.id)
-    user_activity = activity_data.get(user_id, {})
+    user_activity = activity_data[guild_id].get(user_id, {})
     message_count = user_activity.get("messages", 0)
 
     roles_channel = guild.get_channel(1309835417570377728)
@@ -266,14 +293,12 @@ async def check_promotion(member, guild):
 @app_commands.describe(member="The user to view activity stats for (optional)")
 async def activity(interaction: discord.Interaction, member: discord.Member = None):
     """View activity stats for a user."""
+    guild_id = interaction.guild.id
+    ensure_guild_data(guild_id)
     member = member or interaction.user
     user_id = str(member.id)
-    user_activity = activity_data.get(user_id, {"messages": 0})
+    user_activity = activity_data[guild_id].get(user_id, {"messages": 0})
     await interaction.response.send_message(f"{member.mention} has sent {user_activity['messages']} messages.")
-
-@bot.event
-async def on_shutdown():
-    save_activity_data(activity_data)
 
 class RPSButton(Button):
     def __init__(self, label, custom_id):
@@ -281,6 +306,9 @@ class RPSButton(Button):
 
     async def callback(self, interaction: discord.Interaction):
         view: RPSView = self.view
+        # Ensure per-guild data is loaded if needed
+        if interaction.guild:
+            ensure_guild_data(interaction.guild.id)
         if interaction.user in view.choices:
             await interaction.response.send_message("You have already made your choice.", ephemeral=True)
             return
@@ -298,6 +326,9 @@ class RPSView(View):
 
     async def handle_choice(self, interaction: discord.Interaction, choice: str):
         user = interaction.user
+        # Ensure per-guild data is loaded if needed
+        if interaction.guild:
+            ensure_guild_data(interaction.guild.id)
         if user not in [self.player1, self.player2] and self.player2 is not None:
             await interaction.response.send_message("You are not part of this game.", ephemeral=True)
             return
@@ -312,6 +343,9 @@ class RPSView(View):
             await self.resolve_game(interaction)
 
     async def resolve_game(self, interaction: discord.Interaction):
+        # Ensure per-guild data is loaded if needed
+        if interaction.guild:
+            ensure_guild_data(interaction.guild.id)
         if self.player2:
             p1_choice = self.choices.get(self.player1)
             p2_choice = self.choices.get(self.player2)
@@ -340,6 +374,8 @@ class RPSView(View):
 @app_commands.describe(opponent="The user you want to challenge (optional)")
 async def rps(interaction: discord.Interaction, opponent: discord.User = None):
     """Play Rock-Paper-Scissors (single or multi-player)"""
+    if interaction.guild:
+        ensure_guild_data(interaction.guild.id)
     if opponent and opponent == interaction.user:
         await interaction.response.send_message("You cannot challenge yourself.", ephemeral=True)
         return
@@ -359,12 +395,12 @@ class FlipButton(Button):
 
     async def callback(self, interaction: discord.Interaction):
         view: FlipView = self.view
+        # Ensure per-guild data is loaded if needed
+        if interaction.guild:
+            ensure_guild_data(interaction.guild.id)
         # Prevent double choice
         if interaction.user in view.choices:
             await interaction.response.send_message("You have already made your choice.", ephemeral=True)
-            return
-        await view.handle_choice(interaction, self.custom_id)
-
 class FlipView(View):
     def __init__(self, player1, player2=None):
         super().__init__(timeout=60)
@@ -376,6 +412,9 @@ class FlipView(View):
 
     async def handle_choice(self, interaction: discord.Interaction, choice: str):
         user = interaction.user
+        # Ensure per-guild data is loaded if needed
+        if interaction.guild:
+            ensure_guild_data(interaction.guild.id)
         if user not in [self.player1, self.player2]:
             await interaction.response.send_message("You are not part of this game.", ephemeral=True)
             return
@@ -414,6 +453,9 @@ class FlipView(View):
 @bot.tree.command(name="flip", description="Play Heads or Tails (single or multi-player).")
 @app_commands.describe(opponent="The user you want to challenge (optional)")
 async def flip_slash(interaction: discord.Interaction, opponent: discord.User = None):
+    guild_id = interaction.guild.id if interaction.guild else None
+    if guild_id:
+        ensure_guild_data(guild_id)
     if opponent and opponent == interaction.user:
         await interaction.response.send_message("You cannot challenge yourself.", ephemeral=True)
         return
@@ -429,22 +471,26 @@ async def flip_slash(interaction: discord.Interaction, opponent: discord.User = 
 
 @bot.event
 async def on_voice_state_update(member, before, after):
+    guild_id = member.guild.id
+    ensure_guild_data(guild_id)
+    vad = voice_activity_data[guild_id]
+
     if before.channel is None and after.channel is not None:
-        if "voice_log" not in voice_activity_data:
-            voice_activity_data["voice_log"] = {}
-        if str(after.channel.id) not in voice_activity_data["voice_log"]:
-            voice_activity_data["voice_log"][str(after.channel.id)] = []
-        voice_activity_data["voice_log"][str(after.channel.id)].append({
+        if "voice_log" not in vad:
+            vad["voice_log"] = {}
+        if str(after.channel.id) not in vad["voice_log"]:
+            vad["voice_log"][str(after.channel.id)] = []
+        vad["voice_log"][str(after.channel.id)].append({
             "user": member.name,
             "action": "joined",
             "timestamp": str(discord.utils.utcnow() + datetime.timedelta(hours=0, minutes=0))
         })
     elif before.channel is not None and after.channel is None:
-        if "voice_log" not in voice_activity_data:
-            voice_activity_data["voice_log"] = {}
-        if str(before.channel.id) not in voice_activity_data["voice_log"]:
-            voice_activity_data["voice_log"][str(before.channel.id)] = []
-        voice_activity_data["voice_log"][str(before.channel.id)].append({
+        if "voice_log" not in vad:
+            vad["voice_log"] = {}
+        if str(before.channel.id) not in vad["voice_log"]:
+            vad["voice_log"][str(before.channel.id)] = []
+        vad["voice_log"][str(before.channel.id)].append({
             "user": member.name,
             "action": "left",
             "timestamp": str(discord.utils.utcnow() + datetime.timedelta(hours=0, minutes=0))
@@ -453,18 +499,20 @@ async def on_voice_state_update(member, before, after):
         if before.channel.members == []:
             log_channel = member.guild.get_channel(1308408556961136680)
             if log_channel:
-                log_entries = voice_activity_data["voice_log"].pop(str(before.channel.id), [])
+                log_entries = vad["voice_log"].pop(str(before.channel.id), [])
                 log_message = f"Voice channel '{before.channel.name}' log:\n"
                 for entry in log_entries:
                     timestamp = discord.utils.format_dt(discord.utils.parse_time(entry['timestamp']), style='t')
                     log_message += f"{timestamp} - {entry['user']} {entry['action']} the channel.\n"
                 await log_channel.send(log_message)
                 
-    save_voice_activity_data(voice_activity_data)
+    save_voice_activity_data(guild_id, vad)
 
 @bot.tree.command(name="announce", description="Announce a message to a channel (Admin only).")
-@app_commands.describe(channel="The channel to announce in (optional)", message="The announcement message")
+@app_commands.describe(message="The announcement message", channel="The channel to announce in (optional)")
 async def announce_slash(interaction: discord.Interaction, message: str, channel: discord.TextChannel = None):
+
+    guild_id = interaction.guild.id if interaction.guild else None
 
     if not interaction.user.guild_permissions.administrator:
         await interaction.response.send_message("You need to be an admin to use this command.", ephemeral=True)
@@ -502,7 +550,7 @@ def generate_routine_image(routine, filename="routine.png"):
             period_cells.append("")
         data.append([day] + period_cells)
 
-    fig, ax = plt.subplots(figsize=(11, 4))
+    _, ax = plt.subplots(figsize=(11, 4))
     ax.axis('off')
     table = ax.table(
         cellText=data,
@@ -516,7 +564,7 @@ def generate_routine_image(routine, filename="routine.png"):
     table.scale(1.2, 1.6)
 
     # Style header
-    for (row, col), cell in table.get_celld().items():
+    for (row, _), cell in table.get_celld().items():
         if row == 0:
             cell.set_fontsize(13)
             cell.set_text_props(weight='bold', color='white')
@@ -538,7 +586,12 @@ def generate_routine_image(routine, filename="routine.png"):
 async def routine_slash(interaction: discord.Interaction):
     await interaction.response.defer()
     filename = "routine.png"
-    generate_routine_image(class_routine, filename)
+    guild_id = interaction.guild.id if interaction.guild else None
+    if guild_id:
+        ensure_guild_data(guild_id)
+        generate_routine_image(class_routine[guild_id], filename)
+    else:
+        generate_routine_image({}, filename)
     if os.path.exists(filename):
         with open(filename, "rb") as f:
             await interaction.followup.send(file=discord.File(f, filename))
@@ -566,7 +619,7 @@ def generate_routine_image_pdf(routine, filename="routine.pdf"):
             period_cells.append("")
         data.append([day] + period_cells)
 
-    fig, ax = plt.subplots(figsize=(14, 6))
+    _, ax = plt.subplots(figsize=(14, 6))
     ax.axis('off')
     table = ax.table(
         cellText=data,
@@ -580,7 +633,7 @@ def generate_routine_image_pdf(routine, filename="routine.pdf"):
     table.set_fontsize(15)
     table.scale(1.5, 2.0)
 
-    for (row, col), cell in table.get_celld().items():
+    for (row, _), cell in table.get_celld().items():
         if row == 0:
             cell.set_fontsize(16)
             cell.set_text_props(weight='bold', color='white')
@@ -603,7 +656,12 @@ def generate_routine_image_pdf(routine, filename="routine.pdf"):
 async def routinepdf_slash(interaction: discord.Interaction):
     await interaction.response.defer()
     filename = "routine.pdf"
-    generate_routine_image_pdf(class_routine, filename)
+    if not interaction.guild:
+        await interaction.followup.send("This command can only be used in a server.", ephemeral=True)
+        return
+    guild_id = interaction.guild.id
+    ensure_guild_data(guild_id)
+    generate_routine_image_pdf(class_routine[guild_id], filename)
     if os.path.exists(filename):
         with open(filename, "rb") as f:
             await interaction.followup.send(file=discord.File(f, filename))
@@ -611,9 +669,10 @@ async def routinepdf_slash(interaction: discord.Interaction):
         await interaction.followup.send("Routine PDF not found on the server.", ephemeral=True)
 
 class FileModal(Modal, title="Post a File"):
-    def __init__(self, filename: str):
+    def __init__(self, filename: str, guild_id: int = None):
         super().__init__()
         self.filename = filename
+        self.guild_id = guild_id
         self.content = TextInput(
             label="File Content",
             style=discord.TextStyle.paragraph,
@@ -623,6 +682,7 @@ class FileModal(Modal, title="Post a File"):
         self.add_item(self.content)
 
     async def on_submit(self, interaction: discord.Interaction):
+        # Optionally, you can use self.guild_id here if you want to save per-guild
         with open(self.filename, "w", encoding="utf-8") as f:
             f.write(self.content.value)
         with open(self.filename, "rb") as f:
@@ -635,7 +695,8 @@ async def postfilemodal(interaction: discord.Interaction, filename: str):
     if "/" in filename or "\\" in filename:
         await interaction.response.send_message("Invalid filename.", ephemeral=True)
         return
-    await interaction.response.send_modal(FileModal(filename))
+    guild_id = interaction.guild.id if interaction.guild else None
+    await interaction.response.send_modal(FileModal(filename, guild_id=guild_id))
 
 @bot.tree.command(name="helpme", description="Show help for all commands.")
 async def helpme_slash(interaction: discord.Interaction):
@@ -668,7 +729,7 @@ async def helpme_slash(interaction: discord.Interaction):
 """
     await interaction.response.send_message(help_text, ephemeral=True)
 
-bot.run(os.getenv("DISCORD_BOT_TOKEN"))
+bot.run(os.getenv("DISCORD_BOT_TOKEN")
 
 # Ensure the bot token is set in the environment variable DISCORD_BOT_TOKEN
 # You can set it in your terminal or in a .env file if you're using dotenv.
