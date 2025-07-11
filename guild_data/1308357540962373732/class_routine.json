@@ -1,8 +1,8 @@
 {
-    "sunday": "Calculus, Digital Logic, Problem Solving Techniques, Khali",
-    "monday": "C, Calculus, Digital Logic, Discrete Maths",
-    "tuesday": "Calculus, Digital Logic, Drawing Practical (A)/Digital Logic Practical (B), Drawing Practical (A)/C Practical (B)",
-    "wednesday": "Discrete Maths, Calculus, Problem Solving Techniques, Digital Logic Practical (A)/C Practical (B)",
-    "thursday": "Workshop (A)/Drawing Practical (B), C Practical (A)/Drawing Practical (B), C, Problem Solving Techniques",
-    "friday": "DS, C, C Practical (A)/Workshop (B), Khali"
+    "sunday": "AG, OOP, WT, AP",
+    "monday": "AG, OOP, MCA Lab (A)/WT Lab (B), OOP Lab (A)/AP Lab (B)",
+    "tuesday": "OOP, MCA, CT, WT",
+    "wednesday": "AP, AG, AP Lab (A)/OOP Lab(B), MCA",
+    "thursday": ", MCA, WT, AG",
+    "friday": "AP, OOP Lab(A)/AP Lab(B), WT Lab (A)/OOP Lab (B), CT"
 }
